@@ -2693,6 +2693,23 @@ function initStaticTex() {
   setTex('tex-k3', '\\theta \\; (\\cos\\theta = m/l)');
 }
 
+function updateCards(){
+  var l=+L.value;
+  var m=+M.value;
+  if(mode==='q')m=Math.round(m);
+  m=Math.max(-l,Math.min(l,m));
+  var th=Math.acos(Math.max(-1,Math.min(1,m/l)));
+
+  var c1_val = (mode==='q') ? (2*l+1).toString() : '\\infty';
+  var c2_val = (mode==='q') ? (m + '\\,\\hbar') : (m.toFixed(2) + '\\,\\hbar');
+  var c3_val = Math.round(deg(th)) + '^\\circ';
+
+  setTex('c1', c1_val);
+  setTex('c2', c2_val);
+  setTex('c3', c3_val);
+  initStaticTex();
+}
+
 function draw(){
   var l=+L.value;
   M.min=-l;M.max=l;M.step=(mode==='q')?1:0.05;
@@ -2704,10 +2721,14 @@ function draw(){
   var th=Math.acos(Math.max(-1,Math.min(1,m/l)));
   var s='';
 
-  // 3D Precession Tip coordinates for vector L
+  // Smooth 3D Precession Tip coordinates for vector L
   var lx = O.x + rx * Math.cos(phi);
   var ly = (O.y - h) + rx * 0.25 * Math.sin(phi);
-  var isLBehind = Math.sin(phi) < 0;
+  var sinPhi = Math.sin(phi);
+  var isLBehind = sinPhi < 0;
+  
+  // Continuous smooth opacity for 3D depth to prevent visual flickering
+  var vecOpacity = (0.88 + 0.12 * Math.max(0, sinPhi)).toFixed(2);
   
   // 3D Sphere Surface & Volume Grid
   s+='<circle cx="'+O.x+'" cy="'+O.y+'" r="'+R+'" fill="url(#sphereGrad)" style="stroke:rgba(56, 189, 248, 0.35)" stroke-width="1.2"/>';
@@ -2718,15 +2739,15 @@ function draw(){
   // Outer green dashed trajectory circle
   s+='<circle cx="'+O.x+'" cy="'+O.y+'" r="'+R+'" fill="none" style="stroke:var(--text-success, #10b981)" stroke-width="1.5" stroke-dasharray="4 4"/>';
   
-  // Back side of active precession latitude cone base
+  // Active precession latitude cone base
   if(rx > 2){
     s+='<ellipse cx="'+O.x+'" cy="'+(O.y-h)+'" rx="'+rx+'" ry="'+(rx*0.25)+'" fill="rgba(56, 189, 248, 0.06)" style="stroke:rgba(56, 189, 248, 0.4)" stroke-width="1" stroke-dasharray="3 3"/>';
   }
 
-  // Draw vector L IF BEHIND z-axis for realistic 3D depth
+  // Render vector L line if behind z-axis
   if(isLBehind){
-    s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+lx+'" y2="'+ly+'" style="stroke:url(#arrowLGrad);opacity:0.85;filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
-    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent)" stroke-width="1" stroke-dasharray="4 3"/>';
+    s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+lx+'" y2="'+ly+'" style="stroke:url(#arrowLGrad);opacity:'+vecOpacity+';filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
+    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent);opacity:'+vecOpacity+'" stroke-width="1" stroke-dasharray="4 3"/>';
   }
 
   // Vertical z-axis
@@ -2829,27 +2850,33 @@ function draw(){
     s += '<text x="' + tx + '" y="' + Math.max(20, Math.min(320, fy)) + '" font-size="12" font-weight="600" text-anchor="' + anchor + '" style="fill:' + cl + '">' + testMsg + '</text>';
   }
   
-  // Draw vector L IF IN FRONT of z-axis
+  // Render vector L line if in front of z-axis
   if(!isLBehind){
-    s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+lx+'" y2="'+ly+'" style="stroke:url(#arrowLGrad);filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
-    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent)" stroke-width="1" stroke-dasharray="4 3"/>';
+    s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+lx+'" y2="'+ly+'" style="stroke:url(#arrowLGrad);opacity:'+vecOpacity+';filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
+    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent);opacity:'+vecOpacity+'" stroke-width="1" stroke-dasharray="4 3"/>';
   }
 
-
+  // Smoothly continuous "L" label position along vector direction (NO step jumps)
+  var dirX = lx - O.x;
+  var dirY = ly - O.y;
+  var vecLen = Math.hypot(dirX, dirY) || 1;
+  var lx_text = lx + (dirX / vecLen) * 16;
+  var ly_text = ly + (dirY / vecLen) * 16;
+  s+='<text x="'+lx_text+'" y="'+ly_text+'" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:#38bdf8;filter:drop-shadow(0 0 6px rgba(56,189,248,0.85))">L</text>';
   
-  // Offset L label dynamically based on vector tip position
-  var lx_text = (lx >= O.x) ? (lx + 12) : (lx - 20);
-  var ly_text = (ly <= O.y) ? (ly - 6) : (ly + 16);
-  s+='<text x="'+lx_text+'" y="'+ly_text+'" font-size="14" font-weight="700" style="fill:#38bdf8;filter:drop-shadow(0 0 6px rgba(56,189,248,0.85))">L</text>';
+  // Continuous 3D tilt angle theta arc (smoothly anchored to vector direction)
+  var ar = 34;
+  var ex = O.x + ar * (dirX / vecLen);
+  var ey = O.y + ar * (dirY / vecLen);
   
-  // Dynamic 2D projection angle theta arc & label
-  var ang2D = Math.atan2(lx - O.x, O.y - ly);
-  var ar=34, ex=O.x+ar*Math.sin(ang2D), ey=O.y-ar*Math.cos(ang2D);
-  if(Math.abs(ang2D) > 0.02) {
-    var sweep = ang2D > 0 ? 1 : 0;
-    s+='<path d="M'+O.x+' '+(O.y-ar)+' A'+ar+' '+ar+' 0 0 '+sweep+' '+ex+' '+ey+'" fill="none" style="stroke:var(--text-secondary)" stroke-width="1.2"/>';
-  }
-  s+='<text x="'+(O.x+ar*0.5*Math.sin(ang2D/2)+14)+'" y="'+(O.y-ar*0.7*Math.cos(ang2D/2)-4)+'" font-size="12" style="fill:var(--text-secondary)">θ</text>';
+  // Draw smooth arc from vertical +z direction to vector tip direction
+  var sweep = (dirX >= 0) ? 1 : 0;
+  s+='<path d="M'+O.x+' '+(O.y-ar)+' A'+ar+' '+ar+' 0 0 '+sweep+' '+ex+' '+ey+'" fill="none" style="stroke:var(--text-secondary)" stroke-width="1.2"/>';
+  
+  // Label for theta placed smoothly near arc midpoint
+  var midX = O.x + (ar + 12) * Math.sin(th * 0.5 * (dirX >= 0 ? 1 : -1));
+  var midY = O.y - (ar + 12) * Math.cos(th * 0.5);
+  s+='<text x="'+midX+'" y="'+midY+'" font-size="12" text-anchor="middle" dominant-baseline="central" style="fill:var(--text-secondary)">θ</text>';
 
   var msg = (mode === 'q') ? 'Precession of L around B field (m = ' + m + ')' : 'Continuous precession top at custom angle';
   
@@ -2859,21 +2886,12 @@ function draw(){
   
   document.getElementById('lo').textContent=l;
   document.getElementById('mo').textContent=(mode==='q')?m:m.toFixed(2);
-  
-  var c1_val = (mode==='q') ? (2*l+1).toString() : '\\infty';
-  var c2_val = (mode==='q') ? (m + '\\,\\hbar') : (m.toFixed(2) + '\\,\\hbar');
-  var c3_val = Math.round(deg(th)) + '^\\circ';
-  
-  setTex('c1', c1_val);
-  setTex('c2', c2_val);
-  setTex('c3', c3_val);
-  
-  initStaticTex();
 }
 function setMode(md){
   mode=md;
   document.getElementById('bq').classList.toggle('on',md==='q');
   document.getElementById('bc').classList.toggle('on',md==='c');
+  updateCards();
   draw();
 }
 document.getElementById('bq').onclick=function(){setMode('q')};
@@ -2884,6 +2902,7 @@ function runTestAngle(){
   if(!isNaN(val)){
     testedDeg = Math.max(0, Math.min(180, val));
     document.getElementById('deg-in').value = testedDeg;
+    updateCards();
     draw();
   }
 }
@@ -2893,8 +2912,8 @@ document.getElementById('deg-in').onkeydown = function(e){
   if(e.key === 'Enter') runTestAngle();
 };
 
-L.oninput=function(){draw()};
-M.oninput=function(){testedDeg=null;draw()};
+L.oninput=function(){updateCards();draw()};
+M.oninput=function(){testedDeg=null;updateCards();draw()};
 
 
 
@@ -2911,9 +2930,10 @@ tick();
 // Check for KaTeX load and initialize
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
   initStaticTex();
+  updateCards();
   draw();
 } else {
-  window.addEventListener('DOMContentLoaded', function() { initStaticTex(); draw(); });
+  window.addEventListener('DOMContentLoaded', function() { initStaticTex(); updateCards(); draw(); });
 }
-setTimeout(function(){ initStaticTex(); draw(); }, 200);
+setTimeout(function(){ initStaticTex(); updateCards(); draw(); }, 200);
 </script></div></body></html>
