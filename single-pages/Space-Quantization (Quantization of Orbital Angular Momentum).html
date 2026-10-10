@@ -2642,7 +2642,12 @@ body[data-not-sent] > #vis-container ~ #not-sent {
 </div>
 
 <div class="vis-right">
-  <svg id="svg" viewBox="0 0 680 340" width="100%" role="img" style="display:block">
+  <div style="position:relative; width:100%; height:100%;">
+    <div style="position:absolute; top:8px; right:12px; z-index:10; display:flex; gap:6px; align-items:center;">
+      <button id="b-reset-3d" style="padding:4px 10px; border-radius:var(--radius); border:1px solid rgba(255,255,255,0.15); background:rgba(15,23,42,0.75); color:var(--text-secondary); cursor:pointer; font-size:11px; font-weight:500; backdrop-filter:blur(4px); transition:all 0.2s ease;" title="Reset 3D Camera View">Reset 3D View</button>
+    </div>
+    <div style="position:absolute; bottom:6px; left:50%; transform:translateX(-50%); z-index:10; pointer-events:none; font-size:11px; color:var(--text-muted); background:rgba(15,23,42,0.65); padding:3px 10px; border-radius:12px; backdrop-filter:blur(4px); border:1px solid rgba(255,255,255,0.08);">🖐️ Drag mouse / touch to rotate 3D view</div>
+    <svg id="svg" viewBox="0 0 680 340" width="100%" role="img" style="display:block; touch-action:none; cursor:grab;">
     <title>Angular momentum arrow in a magnetic field</title>
     <desc>A vertical magnetic field axis with the angular momentum arrow tilted at allowed angles only.</desc>
     <defs>
@@ -2664,11 +2669,46 @@ body[data-not-sent] > #vis-container ~ #not-sent {
     </defs>
     <g id="g"></g>
   </svg>
+  </div>
 </div>
 </div>
 
 <script>
 var O={x:320,y:170},R=132,mode='q',testedDeg=null,tm=null,phi=0,isPrecessing=true,animId=null;
+var rotX = 0.35, rotY = 0.05; // 3D Camera viewing angles
+var defaultRotX = 0.35, defaultRotY = 0.05;
+var isDragging = false, startX = 0, startY = 0, startRotX = 0, startRotY = 0;
+
+function project3D(x, y, z) {
+  // 1. Yaw rotation around vertical Z axis (magnetic B field)
+  var cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+  var x1 = x * cosY - y * sinY;
+  var y1 = x * sinY + y * cosY;
+  var z1 = z;
+
+  // 2. Pitch rotation around horizontal X axis
+  var cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+  var x2 = x1;
+  var y2 = y1 * cosX - z1 * sinX;
+  var z2 = y1 * sinX + z1 * cosX;
+
+  return {
+    sx: O.x + x2,
+    sy: O.y - z2,
+    depth: y2
+  };
+}
+
+function projectCirclePath(r, z, steps) {
+  steps = steps || 36;
+  var d = "";
+  for (var i = 0; i <= steps; i++) {
+    var a = (i / steps) * Math.PI * 2;
+    var pt = project3D(r * Math.cos(a), r * Math.sin(a), z);
+    d += (i === 0 ? "M" : "L") + pt.sx.toFixed(1) + " " + pt.sy.toFixed(1) + " ";
+  }
+  return d + "Z";
+}
 var L=document.getElementById('l'),M=document.getElementById('m'),G=document.getElementById('g');
 
 function tex(expr) {
@@ -2721,47 +2761,52 @@ function draw(){
   var th=Math.acos(Math.max(-1,Math.min(1,m/l)));
   var s='';
 
-  // Smooth 3D Precession Tip coordinates for vector L
-  var lx = O.x + rx * Math.cos(phi);
-  var ly = (O.y - h) + rx * 0.25 * Math.sin(phi);
-  var sinPhi = Math.sin(phi);
-  var isLBehind = sinPhi < 0;
+  // 3D Precession Tip coordinates for vector L
+  var lx_3d = rx * Math.cos(phi);
+  var ly_3d = rx * Math.sin(phi);
+  var lz_3d = h;
+  var pL = project3D(lx_3d, ly_3d, lz_3d);
+  var pOrigin = project3D(0, 0, 0);
+  var pZCenter = project3D(0, 0, h);
+  var isLBehind = pL.depth < 0;
   
-  // Continuous smooth opacity for 3D depth to prevent visual flickering
-  var vecOpacity = (0.88 + 0.12 * Math.max(0, sinPhi)).toFixed(2);
+  // Continuous smooth depth opacity
+  var vecOpacity = (0.85 + 0.15 * Math.max(0, (pL.depth + R) / (2 * R))).toFixed(2);
   
-  // 3D Sphere Surface & Volume Grid
+  // 3D Sphere Surface Outer Envelope & Volume Grid
   s+='<circle cx="'+O.x+'" cy="'+O.y+'" r="'+R+'" fill="url(#sphereGrad)" style="stroke:rgba(56, 189, 248, 0.35)" stroke-width="1.2"/>';
-  s+='<ellipse cx="'+O.x+'" cy="'+O.y+'" rx="'+(R*0.35)+'" ry="'+R+'" fill="none" style="stroke:rgba(56, 189, 248, 0.14)" stroke-width="0.8" stroke-dasharray="3 4"/>';
-  s+='<ellipse cx="'+O.x+'" cy="'+O.y+'" rx="'+(R*0.75)+'" ry="'+R+'" fill="none" style="stroke:rgba(56, 189, 248, 0.14)" stroke-width="0.8" stroke-dasharray="3 4"/>';
-  s+='<ellipse cx="'+O.x+'" cy="'+O.y+'" rx="'+R+'" ry="'+(R*0.25)+'" fill="none" style="stroke:rgba(56, 189, 248, 0.22)" stroke-width="1" stroke-dasharray="4 4"/>';
+  
+  // 3D Meridians (X-Z and Y-Z planes)
+  s+='<path d="'+projectCirclePath(R, 0, 40)+'" fill="none" style="stroke:rgba(56, 189, 248, 0.22)" stroke-width="1" stroke-dasharray="4 4"/>';
   
   // Outer green dashed trajectory circle
   s+='<circle cx="'+O.x+'" cy="'+O.y+'" r="'+R+'" fill="none" style="stroke:var(--text-success, #10b981)" stroke-width="1.5" stroke-dasharray="4 4"/>';
   
-  // Active precession latitude cone base
+  // Active precession latitude cone base ring
   if(rx > 2){
-    s+='<ellipse cx="'+O.x+'" cy="'+(O.y-h)+'" rx="'+rx+'" ry="'+(rx*0.25)+'" fill="rgba(56, 189, 248, 0.06)" style="stroke:rgba(56, 189, 248, 0.4)" stroke-width="1" stroke-dasharray="3 3"/>';
+    s+='<path d="'+projectCirclePath(rx, h, 36)+'" fill="rgba(56, 189, 248, 0.06)" style="stroke:rgba(56, 189, 248, 0.45)" stroke-width="1.2" stroke-dasharray="3 3"/>';
   }
 
-  // Render vector L line if behind z-axis
+  // Render vector L if behind z-axis
   if(isLBehind){
-    s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+lx+'" y2="'+ly+'" style="stroke:url(#arrowLGrad);opacity:'+vecOpacity+';filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
-    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent);opacity:'+vecOpacity+'" stroke-width="1" stroke-dasharray="4 3"/>';
+    s+='<line x1="'+pOrigin.sx+'" y1="'+pOrigin.sy+'" x2="'+pL.sx+'" y2="'+pL.sy+'" style="stroke:url(#arrowLGrad);opacity:'+vecOpacity+';filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
+    s+='<line x1="'+pL.sx+'" y1="'+pL.sy+'" x2="'+pZCenter.sx+'" y2="'+pZCenter.sy+'" style="stroke:var(--text-accent);opacity:'+vecOpacity+'" stroke-width="1" stroke-dasharray="4 3"/>';
   }
 
-  // Vertical z-axis
-  s+='<line x1="'+O.x+'" y1="'+(O.y+R+28)+'" x2="'+O.x+'" y2="'+(O.y-R-30)+'" style="stroke:#7dd3fc;filter:drop-shadow(0 0 4px rgba(125,211,252,0.4))" stroke-width="1.5" marker-end="url(#ahz)"/>';
-  s+='<text x="'+(O.x+8)+'" y="'+(O.y-R-26)+'" font-size="12" font-weight="500" style="fill:var(--text-secondary)">Magnetic field B (z-axis)</text>';
+  // Vertical 3D z-axis (magnetic field B)
+  var pZBot = project3D(0, 0, -R - 28);
+  var pZTop = project3D(0, 0, R + 30);
+  s+='<line x1="'+pZBot.sx+'" y1="'+pZBot.sy+'" x2="'+pZTop.sx+'" y2="'+pZTop.sy+'" style="stroke:#7dd3fc;filter:drop-shadow(0 0 4px rgba(125,211,252,0.4))" stroke-width="1.5" marker-end="url(#ahz)"/>';
+  s+='<text x="'+(pZTop.sx+8)+'" y="'+(pZTop.sy-4)+'" font-size="12" font-weight="500" style="fill:var(--text-secondary)">Magnetic field B (z-axis)</text>';
   
   // Center nucleus dot & label
-  s+='<circle cx="'+O.x+'" cy="'+O.y+'" r="3.5" style="fill:var(--text-primary)"/>';
-  s+='<text x="'+(O.x-10)+'" y="'+(O.y+16)+'" font-size="11" text-anchor="end" style="fill:var(--text-muted)">Nucleus</text>';
+  s+='<circle cx="'+pOrigin.sx+'" cy="'+pOrigin.sy+'" r="3.5" style="fill:var(--text-primary)"/>';
+  s+='<text x="'+(pOrigin.sx-10)+'" y="'+(pOrigin.sy+16)+'" font-size="11" text-anchor="end" style="fill:var(--text-muted)">Nucleus</text>';
   
-  // m levels projection lines and labels
+  // m levels projection lines and labels in 3D
   for(var k=-l;k<=l;k++){
-    var yy=O.y-k*sc;
-    var xx=Math.sqrt(Math.max(0,R*R-(k*sc)*(k*sc)));
+    var zk = k * sc;
+    var rk = Math.sqrt(Math.max(0, R * R - zk * zk));
     var isCurrentM = (Math.abs(k - m) < 0.05);
     
     var lineStroke = isCurrentM ? "var(--text-accent, #38bdf8)" : "var(--border-strong)";
@@ -2770,27 +2815,32 @@ function draw(){
     var textFill = isCurrentM ? "var(--text-accent, #38bdf8)" : "var(--text-secondary)";
     var fontW = isCurrentM ? "700" : "600";
     
-    if(xx > 2 && !isCurrentM){
-      var ry = xx * 0.25;
-      s+='<ellipse cx="'+O.x+'" cy="'+yy+'" rx="'+xx+'" ry="'+ry+'" fill="none" style="stroke:rgba(255, 255, 255, 0.1)" stroke-width="0.75" stroke-dasharray="3 3"/>';
+    // Draw 3D latitude ring
+    if(rk > 2 && !isCurrentM){
+      s+='<path d="'+projectCirclePath(rk, zk, 32)+'" fill="none" style="stroke:rgba(255, 255, 255, 0.1)" stroke-width="0.75" stroke-dasharray="3 3"/>';
     }
     
-    s+='<text x="'+(O.x-R-14)+'" y="'+(yy+4)+'" font-size="12" font-weight="'+fontW+'" text-anchor="end" style="fill:'+textFill+'">m = '+(k>0?'+'+k:k)+'</text>';
-    s+='<line x1="'+(O.x-R-6)+'" y1="'+yy+'" x2="'+(O.x+xx)+'" y2="'+yy+'" style="stroke:'+lineStroke+'" stroke-width="'+lineWidth+'" stroke-dasharray="'+lineDash+'"/>';
-    s+='<line x1="'+(O.x-4)+'" y1="'+yy+'" x2="'+(O.x+4)+'" y2="'+yy+'" style="stroke:'+(isCurrentM ? "var(--text-accent)" : "var(--text-secondary)")+'" stroke-width="1.5"/>';
+    var ptZ = project3D(0, 0, zk);
+    var fixedDotX = O.x + rk; // Keep blue quantum state dots fixed on the reference right profile boundary
+    var fixedDotY = ptZ.sy;
+    
+    s+='<text x="'+(O.x-R-14)+'" y="'+(ptZ.sy+4)+'" font-size="12" font-weight="'+fontW+'" text-anchor="end" style="fill:'+textFill+'">m = '+(k>0?'+'+k:k)+'</text>';
+    s+='<line x1="'+(O.x-R-6)+'" y1="'+ptZ.sy+'" x2="'+fixedDotX+'" y2="'+ptZ.sy+'" style="stroke:'+lineStroke+'" stroke-width="'+lineWidth+'" stroke-dasharray="'+lineDash+'"/>';
+    s+='<line x1="'+(ptZ.sx-4)+'" y1="'+ptZ.sy+'" x2="'+(ptZ.sx+4)+'" y2="'+ptZ.sy+'" style="stroke:'+(isCurrentM ? "var(--text-accent)" : "var(--text-secondary)")+'" stroke-width="1.5"/>';
     
     if(mode==='q'){
       var dotFill = isCurrentM ? "var(--text-accent)" : "var(--surface-1)";
-      s+='<circle cx="'+(O.x+xx)+'" cy="'+yy+'" r="4.5" style="fill:'+dotFill+';stroke:var(--text-accent)" stroke-width="1.5"/>';
+      s+='<circle cx="'+fixedDotX+'" cy="'+fixedDotY+'" r="4.5" style="fill:'+dotFill+';stroke:var(--text-accent)" stroke-width="1.5"/>';
     }
   }
 
   if(mode==='c'){
-    var curYY = O.y - h;
-    s+='<line x1="'+(O.x-R-6)+'" y1="'+curYY+'" x2="'+(O.x+rx)+'" y2="'+curYY+'" style="stroke:var(--text-accent, #38bdf8)" stroke-width="1.5" stroke-dasharray="3 3"/>';
+    var pZCur = project3D(0, 0, h);
+    s+='<line x1="'+(O.x-R-6)+'" y1="'+pZCur.sy+'" x2="'+(pZCur.sx+rx)+'" y2="'+pZCur.sy+'" style="stroke:var(--text-accent, #38bdf8)" stroke-width="1.5" stroke-dasharray="3 3"/>';
     for(var q=-l;q<=l+0.001;q+=l/8){
-      var hh=q*sc,xx2=Math.sqrt(Math.max(0,R*R-hh*hh));
-      s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+(O.x+xx2)+'" y2="'+(O.y-hh)+'" style="stroke:var(--border-strong)" stroke-width="0.75"/>';
+      var hh=q*sc,rk2=Math.sqrt(Math.max(0,R*R-hh*hh));
+      var ptC = project3D(rk2, 0, hh);
+      s+='<line x1="'+pOrigin.sx+'" y1="'+pOrigin.sy+'" x2="'+ptC.sx+'" y2="'+ptC.sy+'" style="stroke:var(--border-strong)" stroke-width="0.75"/>';
     }
   }
   
@@ -2819,8 +2869,11 @@ function draw(){
         h = m * sc;
         rx = Math.sqrt(Math.max(0, R * R - h * h));
         th = Math.acos(Math.max(-1, Math.min(1, m / l)));
-        lx = O.x + rx * Math.cos(phi);
-        ly = (O.y - h) + rx * 0.25 * Math.sin(phi);
+        lx_3d = rx * Math.cos(phi);
+        ly_3d = rx * Math.sin(phi);
+        lz_3d = h;
+        pL = project3D(lx_3d, ly_3d, lz_3d);
+        pZCenter = project3D(0, 0, h);
       } else {
         isAllowed = false;
         testMsg = degVal + '° — forbidden (matches no m)';
@@ -2834,49 +2887,49 @@ function draw(){
       h = m * sc;
       rx = Math.sqrt(Math.max(0, R * R - h * h));
       th = radVal;
-      lx = O.x + rx * Math.cos(phi);
-      ly = (O.y - h) + rx * 0.25 * Math.sin(phi);
+      lx_3d = rx * Math.cos(phi);
+      ly_3d = rx * Math.sin(phi);
+      lz_3d = h;
+      pL = project3D(lx_3d, ly_3d, lz_3d);
+      pZCenter = project3D(0, 0, h);
     }
     
-    var fx = O.x + R * Math.sin(radVal);
-    var fy = O.y - R * Math.cos(radVal);
+    var ptTest = project3D(R * Math.sin(radVal), 0, R * Math.cos(radVal));
     var mk = isAllowed ? 'ahg' : 'ahf';
     var cl = isAllowed ? 'var(--text-success)' : 'var(--text-danger)';
     
     var tx = (Math.sin(radVal) >= 0) ? (O.x + R + 18) : (O.x - R - 18);
     var anchor = (Math.sin(radVal) >= 0) ? 'start' : 'end';
     
-    s += '<line x1="' + O.x + '" y1="' + O.y + '" x2="' + fx + '" y2="' + fy + '" style="stroke:' + cl + '" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#' + mk + ')"/>';
-    s += '<text x="' + tx + '" y="' + Math.max(20, Math.min(320, fy)) + '" font-size="12" font-weight="600" text-anchor="' + anchor + '" style="fill:' + cl + '">' + testMsg + '</text>';
+    s += '<line x1="' + pOrigin.sx + '" y1="' + pOrigin.sy + '" x2="' + ptTest.sx + '" y2="' + ptTest.sy + '" style="stroke:' + cl + '" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#' + mk + ')"/>';
+    s += '<text x="' + tx + '" y="' + Math.max(20, Math.min(320, ptTest.sy)) + '" font-size="12" font-weight="600" text-anchor="' + anchor + '" style="fill:' + cl + '">' + testMsg + '</text>';
   }
   
-  // Render vector L line if in front of z-axis
+  // Render vector L if in front of z-axis
   if(!isLBehind){
-    s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+lx+'" y2="'+ly+'" style="stroke:url(#arrowLGrad);opacity:'+vecOpacity+';filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
-    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent);opacity:'+vecOpacity+'" stroke-width="1" stroke-dasharray="4 3"/>';
+    s+='<line x1="'+pOrigin.sx+'" y1="'+pOrigin.sy+'" x2="'+pL.sx+'" y2="'+pL.sy+'" style="stroke:url(#arrowLGrad);opacity:'+vecOpacity+';filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
+    s+='<line x1="'+pL.sx+'" y1="'+pL.sy+'" x2="'+pZCenter.sx+'" y2="'+pZCenter.sy+'" style="stroke:var(--text-accent);opacity:'+vecOpacity+'" stroke-width="1" stroke-dasharray="4 3"/>';
   }
 
-  // Smoothly continuous "L" label position along vector direction (NO step jumps)
-  var dirX = lx - O.x;
-  var dirY = ly - O.y;
+  // Smooth "L" label position in 3D
+  var dirX = pL.sx - pOrigin.sx;
+  var dirY = pL.sy - pOrigin.sy;
   var vecLen = Math.hypot(dirX, dirY) || 1;
-  var lx_text = lx + (dirX / vecLen) * 16;
-  var ly_text = ly + (dirY / vecLen) * 16;
+  var lx_text = pL.sx + (dirX / vecLen) * 16;
+  var ly_text = pL.sy + (dirY / vecLen) * 16;
   s+='<text x="'+lx_text+'" y="'+ly_text+'" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" style="fill:#38bdf8;filter:drop-shadow(0 0 6px rgba(56,189,248,0.85))">L</text>';
   
-  // Continuous 3D tilt angle theta arc (smoothly anchored to vector direction)
+  // Continuous 3D tilt angle theta arc
   var ar = 34;
-  var ex = O.x + ar * (dirX / vecLen);
-  var ey = O.y + ar * (dirY / vecLen);
+  var pArcTop = project3D(0, 0, ar);
+  var pArcVec = project3D(ar * Math.sin(th) * Math.cos(phi), ar * Math.sin(th) * Math.sin(phi), ar * Math.cos(th));
   
-  // Draw smooth arc from vertical +z direction to vector tip direction
-  var sweep = (dirX >= 0) ? 1 : 0;
-  s+='<path d="M'+O.x+' '+(O.y-ar)+' A'+ar+' '+ar+' 0 0 '+sweep+' '+ex+' '+ey+'" fill="none" style="stroke:var(--text-secondary)" stroke-width="1.2"/>';
+  s+='<line x1="'+pOrigin.sx+'" y1="'+pOrigin.sy+'" x2="'+pArcVec.sx+'" y2="'+pArcVec.sy+'" style="stroke:var(--text-secondary);opacity:0.4" stroke-width="0.8"/>';
+  s+='<path d="M'+pArcTop.sx+' '+pArcTop.sy+' L'+pArcVec.sx+' '+pArcVec.sy+'" fill="none" style="stroke:var(--text-secondary)" stroke-width="1.2"/>';
   
-  // Label for theta placed smoothly near arc midpoint
-  var midX = O.x + (ar + 12) * Math.sin(th * 0.5 * (dirX >= 0 ? 1 : -1));
-  var midY = O.y - (ar + 12) * Math.cos(th * 0.5);
-  s+='<text x="'+midX+'" y="'+midY+'" font-size="12" text-anchor="middle" dominant-baseline="central" style="fill:var(--text-secondary)">θ</text>';
+  // Label for theta placed smoothly near arc
+  var pArcMid = project3D((ar + 12) * Math.sin(th * 0.5) * Math.cos(phi), (ar + 12) * Math.sin(th * 0.5) * Math.sin(phi), (ar + 12) * Math.cos(th * 0.5));
+  s+='<text x="'+pArcMid.sx+'" y="'+pArcMid.sy+'" font-size="12" text-anchor="middle" dominant-baseline="central" style="fill:var(--text-secondary)">θ</text>';
 
   var msg = (mode === 'q') ? 'Precession of L around B field (m = ' + m + ')' : 'Continuous precession top at custom angle';
   
@@ -2926,6 +2979,44 @@ function tick(){
   animId = requestAnimationFrame(tick);
 }
 tick();
+
+// Interactive 3D Orbit Controls (Mouse & Mobile Touch)
+var svgEl = document.getElementById('svg');
+if (svgEl) {
+  svgEl.onpointerdown = function(e) {
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startRotX = rotX;
+    startRotY = rotY;
+    svgEl.style.cursor = 'grabbing';
+  };
+
+  window.onpointermove = function(e) {
+    if (!isDragging) return;
+    var dx = e.clientX - startX;
+    var dy = e.clientY - startY;
+    rotY = startRotY + dx * 0.008;
+    rotX = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, startRotX - dy * 0.008));
+    draw();
+  };
+
+  window.onpointerup = window.onpointercancel = function() {
+    if (isDragging) {
+      isDragging = false;
+      svgEl.style.cursor = 'grab';
+    }
+  };
+}
+
+var btnReset3D = document.getElementById('b-reset-3d');
+if (btnReset3D) {
+  btnReset3D.onclick = function() {
+    rotX = defaultRotX;
+    rotY = defaultRotY;
+    draw();
+  };
+}
 
 // Check for KaTeX load and initialize
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
