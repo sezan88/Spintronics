@@ -2602,10 +2602,9 @@ body[data-not-sent] > #vis-container ~ #not-sent {
 
 <div class="vis-left">
   <div class="controls-container">
-    <div class="seg" style="display:flex; gap:8px; align-items:center;">
+    <div class="seg">
       <button id="bq" class="on">Quantum Approach</button>
       <button id="bc">Classical Approach</button>
-      <button id="bp" class="on" style="margin-left:auto;">Pause Precession</button>
     </div>
     <div class="row angle-test-row" style="margin-top: 6px; gap: 8px;">
       <label for="deg-in" style="font-size: 13px; font-weight: 600; color: var(--text-secondary); min-width: 65px;">Test Angle:</label>
@@ -2836,12 +2835,7 @@ function draw(){
     s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent)" stroke-width="1" stroke-dasharray="4 3"/>';
   }
 
-  // Precession arrow indicator on latitude ring showing direction of motion
-  if(rx > 10){
-    var pArx = lx + (rx * 0.08 * (-Math.sin(phi)));
-    var pAry = ly + (rx * 0.08 * 0.25 * Math.cos(phi));
-    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+pArx+'" y2="'+pAry+'" style="stroke:#7dd3fc" stroke-width="2" marker-end="url(#ahz)"/>';
-  }
+
   
   // Offset L label dynamically based on vector tip position
   var lx_text = (lx >= O.x) ? (lx + 12) : (lx - 20);
@@ -2902,14 +2896,7 @@ document.getElementById('deg-in').onkeydown = function(e){
 L.oninput=function(){draw()};
 M.oninput=function(){testedDeg=null;draw()};
 
-var bpBtn = document.getElementById('bp');
-if(bpBtn){
-  bpBtn.onclick = function(){
-    isPrecessing = !isPrecessing;
-    this.classList.toggle('on', isPrecessing);
-    this.textContent = isPrecessing ? 'Pause Precession' : 'Play Precession';
-  };
-}
+
 
 function tick(){
   if(isPrecessing){
