@@ -2602,9 +2602,10 @@ body[data-not-sent] > #vis-container ~ #not-sent {
 
 <div class="vis-left">
   <div class="controls-container">
-    <div class="seg">
+    <div class="seg" style="display:flex; gap:8px; align-items:center;">
       <button id="bq" class="on">Quantum Approach</button>
       <button id="bc">Classical Approach</button>
+      <button id="bp" class="on" style="margin-left:auto;">Pause Precession</button>
     </div>
     <div class="row angle-test-row" style="margin-top: 6px; gap: 8px;">
       <label for="deg-in" style="font-size: 13px; font-weight: 600; color: var(--text-secondary); min-width: 65px;">Test Angle:</label>
@@ -2668,7 +2669,7 @@ body[data-not-sent] > #vis-container ~ #not-sent {
 </div>
 
 <script>
-var O={x:320,y:170},R=132,mode='q',testedDeg=null,tm=null;
+var O={x:320,y:170},R=132,mode='q',testedDeg=null,tm=null,phi=0,isPrecessing=true,animId=null;
 var L=document.getElementById('l'),M=document.getElementById('m'),G=document.getElementById('g');
 
 function tex(expr) {
@@ -2700,9 +2701,14 @@ function draw(){
   if(mode==='q')m=Math.round(m);
   m=Math.max(-l,Math.min(l,m));
   M.value=m;
-  var sc=R/l,h=m*sc,x=Math.sqrt(Math.max(0,R*R-h*h));
+  var sc=R/l,h=m*sc,rx=Math.sqrt(Math.max(0,R*R-h*h));
   var th=Math.acos(Math.max(-1,Math.min(1,m/l)));
   var s='';
+
+  // 3D Precession Tip coordinates for vector L
+  var lx = O.x + rx * Math.cos(phi);
+  var ly = (O.y - h) + rx * 0.25 * Math.sin(phi);
+  var isLBehind = Math.sin(phi) < 0;
   
   // 3D Sphere Surface & Volume Grid
   s+='<circle cx="'+O.x+'" cy="'+O.y+'" r="'+R+'" fill="url(#sphereGrad)" style="stroke:rgba(56, 189, 248, 0.35)" stroke-width="1.2"/>';
@@ -2713,6 +2719,17 @@ function draw(){
   // Outer green dashed trajectory circle
   s+='<circle cx="'+O.x+'" cy="'+O.y+'" r="'+R+'" fill="none" style="stroke:var(--text-success, #10b981)" stroke-width="1.5" stroke-dasharray="4 4"/>';
   
+  // Back side of active precession latitude cone base
+  if(rx > 2){
+    s+='<ellipse cx="'+O.x+'" cy="'+(O.y-h)+'" rx="'+rx+'" ry="'+(rx*0.25)+'" fill="rgba(56, 189, 248, 0.06)" style="stroke:rgba(56, 189, 248, 0.4)" stroke-width="1" stroke-dasharray="3 3"/>';
+  }
+
+  // Draw vector L IF BEHIND z-axis for realistic 3D depth
+  if(isLBehind){
+    s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+lx+'" y2="'+ly+'" style="stroke:url(#arrowLGrad);opacity:0.85;filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
+    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent)" stroke-width="1" stroke-dasharray="4 3"/>';
+  }
+
   // Vertical z-axis
   s+='<line x1="'+O.x+'" y1="'+(O.y+R+28)+'" x2="'+O.x+'" y2="'+(O.y-R-30)+'" style="stroke:#7dd3fc;filter:drop-shadow(0 0 4px rgba(125,211,252,0.4))" stroke-width="1.5" marker-end="url(#ahz)"/>';
   s+='<text x="'+(O.x+8)+'" y="'+(O.y-R-26)+'" font-size="12" font-weight="500" style="fill:var(--text-secondary)">Magnetic field B (z-axis)</text>';
@@ -2721,7 +2738,7 @@ function draw(){
   s+='<circle cx="'+O.x+'" cy="'+O.y+'" r="3.5" style="fill:var(--text-primary)"/>';
   s+='<text x="'+(O.x-10)+'" y="'+(O.y+16)+'" font-size="11" text-anchor="end" style="fill:var(--text-muted)">Nucleus</text>';
   
-  // m levels projection lines and labels (placed OUTSIDE on the left of the circle)
+  // m levels projection lines and labels
   for(var k=-l;k<=l;k++){
     var yy=O.y-k*sc;
     var xx=Math.sqrt(Math.max(0,R*R-(k*sc)*(k*sc)));
@@ -2733,45 +2750,30 @@ function draw(){
     var textFill = isCurrentM ? "var(--text-accent, #38bdf8)" : "var(--text-secondary)";
     var fontW = isCurrentM ? "700" : "600";
     
-    // 3D Precession latitude ellipse ring at height yy
-    if(xx > 2){
+    if(xx > 2 && !isCurrentM){
       var ry = xx * 0.25;
-      var ringStroke = isCurrentM ? "rgba(56, 189, 248, 0.75)" : "rgba(255, 255, 255, 0.1)";
-      var ringFill = isCurrentM ? "rgba(56, 189, 248, 0.08)" : "none";
-      s+='<ellipse cx="'+O.x+'" cy="'+yy+'" rx="'+xx+'" ry="'+ry+'" fill="'+ringFill+'" style="stroke:'+ringStroke+'" stroke-width="'+(isCurrentM?1.5:0.75)+'" stroke-dasharray="3 3"/>';
+      s+='<ellipse cx="'+O.x+'" cy="'+yy+'" rx="'+xx+'" ry="'+ry+'" fill="none" style="stroke:rgba(255, 255, 255, 0.1)" stroke-width="0.75" stroke-dasharray="3 3"/>';
     }
     
-    // Label for m placed strictly OUTSIDE left side of circle (blue if current m, gray otherwise)
     s+='<text x="'+(O.x-R-14)+'" y="'+(yy+4)+'" font-size="12" font-weight="'+fontW+'" text-anchor="end" style="fill:'+textFill+'">m = '+(k>0?'+'+k:k)+'</text>';
-    
-    // Full dotted line to value of m: BLUE for current value of L/m, GRAY for rest
     s+='<line x1="'+(O.x-R-6)+'" y1="'+yy+'" x2="'+(O.x+xx)+'" y2="'+yy+'" style="stroke:'+lineStroke+'" stroke-width="'+lineWidth+'" stroke-dasharray="'+lineDash+'"/>';
-    
-    // Small tick mark on z-axis
     s+='<line x1="'+(O.x-4)+'" y1="'+yy+'" x2="'+(O.x+4)+'" y2="'+yy+'" style="stroke:'+(isCurrentM ? "var(--text-accent)" : "var(--text-secondary)")+'" stroke-width="1.5"/>';
     
-    // Dot at allowed quantum state on circle edge
     if(mode==='q'){
       var dotFill = isCurrentM ? "var(--text-accent)" : "var(--surface-1)";
       s+='<circle cx="'+(O.x+xx)+'" cy="'+yy+'" r="4.5" style="fill:'+dotFill+';stroke:var(--text-accent)" stroke-width="1.5"/>';
     }
   }
 
-  // In classical mode, draw the continuous blue projection line for non-integer m
   if(mode==='c'){
     var curYY = O.y - h;
-    s+='<line x1="'+(O.x-R-6)+'" y1="'+curYY+'" x2="'+(O.x+x)+'" y2="'+curYY+'" style="stroke:var(--text-accent, #38bdf8)" stroke-width="1.5" stroke-dasharray="3 3"/>';
-  }
-  
-  // Classical continuous lines
-  if(mode==='c'){
+    s+='<line x1="'+(O.x-R-6)+'" y1="'+curYY+'" x2="'+(O.x+rx)+'" y2="'+curYY+'" style="stroke:var(--text-accent, #38bdf8)" stroke-width="1.5" stroke-dasharray="3 3"/>';
     for(var q=-l;q<=l+0.001;q+=l/8){
       var hh=q*sc,xx2=Math.sqrt(Math.max(0,R*R-hh*hh));
       s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+(O.x+xx2)+'" y2="'+(O.y-hh)+'" style="stroke:var(--border-strong)" stroke-width="0.75"/>';
     }
   }
   
-  // Tested angle display if present
   if(testedDeg !== null && !isNaN(testedDeg)){
     var degVal = Math.max(0, Math.min(180, testedDeg));
     var radVal = degVal * Math.PI / 180;
@@ -2795,8 +2797,10 @@ function draw(){
         M.value = matchedK;
         m = matchedK;
         h = m * sc;
-        x = Math.sqrt(Math.max(0, R * R - h * h));
+        rx = Math.sqrt(Math.max(0, R * R - h * h));
         th = Math.acos(Math.max(-1, Math.min(1, m / l)));
+        lx = O.x + rx * Math.cos(phi);
+        ly = (O.y - h) + rx * 0.25 * Math.sin(phi);
       } else {
         isAllowed = false;
         testMsg = degVal + '° — forbidden (matches no m)';
@@ -2808,8 +2812,10 @@ function draw(){
       M.value = calcM.toFixed(2);
       m = calcM;
       h = m * sc;
-      x = Math.sqrt(Math.max(0, R * R - h * h));
+      rx = Math.sqrt(Math.max(0, R * R - h * h));
       th = radVal;
+      lx = O.x + rx * Math.cos(phi);
+      ly = (O.y - h) + rx * 0.25 * Math.sin(phi);
     }
     
     var fx = O.x + R * Math.sin(radVal);
@@ -2817,7 +2823,6 @@ function draw(){
     var mk = isAllowed ? 'ahg' : 'ahf';
     var cl = isAllowed ? 'var(--text-success)' : 'var(--text-danger)';
     
-    // Position test message text so it does not overlap vector arrow
     var tx = (Math.sin(radVal) >= 0) ? (O.x + R + 18) : (O.x - R - 18);
     var anchor = (Math.sin(radVal) >= 0) ? 'start' : 'end';
     
@@ -2825,21 +2830,34 @@ function draw(){
     s += '<text x="' + tx + '" y="' + Math.max(20, Math.min(320, fy)) + '" font-size="12" font-weight="600" text-anchor="' + anchor + '" style="fill:' + cl + '">' + testMsg + '</text>';
   }
   
-  // Vector L line & label
-  s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+(O.x+x)+'" y2="'+(O.y-h)+'" style="stroke:url(#arrowLGrad);filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
-  s+='<line x1="'+(O.x+x)+'" y1="'+(O.y-h)+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent)" stroke-width="1" stroke-dasharray="4 3"/>';
-  
-  // Offset L label to avoid overlap
-  var lx = (x < 15) ? (O.x + x + 16) : (O.x + x + 10);
-  var ly = (O.y - h < 40) ? (O.y - h + 16) : (O.y - h + 4);
-  s+='<text x="'+lx+'" y="'+ly+'" font-size="14" font-weight="700" style="fill:#38bdf8;filter:drop-shadow(0 0 6px rgba(56,189,248,0.85))">L</text>';
-  
-  // Angle theta arc & label
-  var ar=34,ex=O.x+ar*Math.sin(th),ey=O.y-ar*Math.cos(th);
-  if(th>0.02) s+='<path d="M'+O.x+' '+(O.y-ar)+' A'+ar+' '+ar+' 0 0 1 '+ex+' '+ey+'" fill="none" style="stroke:var(--text-secondary)" stroke-width="1"/>';
-  s+='<text x="'+(O.x+ar*0.5*Math.sin(th/2)+14)+'" y="'+(O.y-ar*0.7*Math.cos(th/2)-4)+'" font-size="12" style="fill:var(--text-secondary)">θ</text>';
+  // Draw vector L IF IN FRONT of z-axis
+  if(!isLBehind){
+    s+='<line x1="'+O.x+'" y1="'+O.y+'" x2="'+lx+'" y2="'+ly+'" style="stroke:url(#arrowLGrad);filter:drop-shadow(0 0 6px rgba(56,189,248,0.75))" stroke-width="3.5" marker-end="url(#ah)"/>';
+    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+O.x+'" y2="'+(O.y-h)+'" style="stroke:var(--text-accent)" stroke-width="1" stroke-dasharray="4 3"/>';
+  }
 
-  var msg = (mode === 'q') ? 'Only these ' + (2 * l + 1) + ' positions are allowed' : 'Any angle is allowed, no restriction';
+  // Precession arrow indicator on latitude ring showing direction of motion
+  if(rx > 10){
+    var pArx = lx + (rx * 0.08 * (-Math.sin(phi)));
+    var pAry = ly + (rx * 0.08 * 0.25 * Math.cos(phi));
+    s+='<line x1="'+lx+'" y1="'+ly+'" x2="'+pArx+'" y2="'+pAry+'" style="stroke:#7dd3fc" stroke-width="2" marker-end="url(#ahz)"/>';
+  }
+  
+  // Offset L label dynamically based on vector tip position
+  var lx_text = (lx >= O.x) ? (lx + 12) : (lx - 20);
+  var ly_text = (ly <= O.y) ? (ly - 6) : (ly + 16);
+  s+='<text x="'+lx_text+'" y="'+ly_text+'" font-size="14" font-weight="700" style="fill:#38bdf8;filter:drop-shadow(0 0 6px rgba(56,189,248,0.85))">L</text>';
+  
+  // Dynamic 2D projection angle theta arc & label
+  var ang2D = Math.atan2(lx - O.x, O.y - ly);
+  var ar=34, ex=O.x+ar*Math.sin(ang2D), ey=O.y-ar*Math.cos(ang2D);
+  if(Math.abs(ang2D) > 0.02) {
+    var sweep = ang2D > 0 ? 1 : 0;
+    s+='<path d="M'+O.x+' '+(O.y-ar)+' A'+ar+' '+ar+' 0 0 '+sweep+' '+ex+' '+ey+'" fill="none" style="stroke:var(--text-secondary)" stroke-width="1.2"/>';
+  }
+  s+='<text x="'+(O.x+ar*0.5*Math.sin(ang2D/2)+14)+'" y="'+(O.y-ar*0.7*Math.cos(ang2D/2)-4)+'" font-size="12" style="fill:var(--text-secondary)">θ</text>';
+
+  var msg = (mode === 'q') ? 'Precession of L around B field (m = ' + m + ')' : 'Continuous precession top at custom angle';
   
   G.innerHTML=s;
   var msgEl = document.getElementById('msg-text');
@@ -2848,7 +2866,6 @@ function draw(){
   document.getElementById('lo').textContent=l;
   document.getElementById('mo').textContent=(mode==='q')?m:m.toFixed(2);
   
-  // Render values using LaTeX
   var c1_val = (mode==='q') ? (2*l+1).toString() : '\\infty';
   var c2_val = (mode==='q') ? (m + '\\,\\hbar') : (m.toFixed(2) + '\\,\\hbar');
   var c3_val = Math.round(deg(th)) + '^\\circ';
@@ -2884,6 +2901,25 @@ document.getElementById('deg-in').onkeydown = function(e){
 
 L.oninput=function(){draw()};
 M.oninput=function(){testedDeg=null;draw()};
+
+var bpBtn = document.getElementById('bp');
+if(bpBtn){
+  bpBtn.onclick = function(){
+    isPrecessing = !isPrecessing;
+    this.classList.toggle('on', isPrecessing);
+    this.textContent = isPrecessing ? 'Pause Precession' : 'Play Precession';
+  };
+}
+
+function tick(){
+  if(isPrecessing){
+    phi += 0.025;
+    if(phi > 2 * Math.PI) phi -= 2 * Math.PI;
+    draw();
+  }
+  animId = requestAnimationFrame(tick);
+}
+tick();
 
 // Check for KaTeX load and initialize
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
